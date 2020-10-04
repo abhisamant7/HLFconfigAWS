@@ -1,0 +1,67 @@
+---
+Organizations:
+
+    - &Orderer
+        Name: OrdererMSP
+        ID: OrdererMSP
+        MSPDir: ./crypto-config/ordererOrganizations/dfarmadmin.com/msp
+
+    - &Dfarmadmin
+        Name: DfarmadminMSP
+        ID: DfarmadminMSP
+        MSPDir: ./crypto-config/peerOrganizations/dfarmadmin.com/msp
+
+    - &Dfarmretail
+        Name: DfarmretailMSP
+        ID: DfarmretailMSP
+        MSPDir: ./crypto-config/peerOrganizations/dfarmretail.com/msp
+
+Orderer: &OrdererDefaults
+
+    OrdererType: solo
+    Addresses:
+        - orderer.dfarmadmin.com:7050
+    BatchTimeout: 2s
+    BatchSize:
+        MaxMessageCount: 10
+        AbsoluteMaxBytes: 99 MB
+        PreferredMaxBytes: 512 KB
+    Kafka:
+        Brokers:
+            - 127.0.0.1:9092
+    Organizations:
+Application: &ApplicationDefaults
+    Organizations:
+
+Profiles:
+
+    OrdererGenesis:
+        Orderer:
+            <<: *OrdererDefaults
+            Organizations:
+                - *Orderer
+        Consortiums:
+            dfarmConsortium:
+                Organizations:
+                    - *Dfarmadmin
+                    - *Dfarmretail
+
+    ChannelAll:
+        Consortium: dfarmConsortium
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - *Dfarmadmin
+                - *Dfarmretail
+
+    Channel12:
+        Consortium: dfarmConsortium
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - *Dfarmadmin
+                - *Dfarmretail
+
+
+
+                

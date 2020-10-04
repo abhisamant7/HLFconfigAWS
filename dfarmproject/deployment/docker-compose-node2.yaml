@@ -1,0 +1,259 @@
+version: '2'
+
+networks:
+    fabric:
+
+services:
+
+     ca.dfarmretail.com:
+        image: hyperledger/fabric-ca
+        container_name: ca.dfarmretail.com
+        environment:
+            - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+            - FABRIC_CA_SERVER_CA_NAME=ca.dfarmretail.com
+            - FABRIC_CA_SERVER_CA_CERTFILE=/etc/hyperledger/fabric-ca-server-config/ca.dfarmretail.com-cert.pem
+            - FABRIC_CA_SERVER_CA_KEYFILE=/etc/hyperledger/fabric-ca-server-config/bbae021cd20159d3cc792595a3b74e3120a4a5d0e874c53c405de3c5eef37e64_sk
+        ports:
+            - "7054:7054"
+        command: sh -c 'fabric-ca-server start -b admin:adminpw'
+        volumes:
+            - ../crypto-config/peerOrganizations/dfarmretail.com/ca/:/etc/hyperledger/fabric-ca-server-config
+        networks:
+            - fabric
+
+
+     couchdb1:
+        container_name: couchdb1
+        image: hyperledger/fabric-couchdb
+    #   Uncomment the port mapping if you want to expose the CouchDB service,
+    #   for example to utilize Fauxton User Interface in dev environments.
+        ports:
+         - "7984:5984"
+        networks:
+            - fabric
+
+
+     couchdb2:
+        container_name: couchdb2
+        image: hyperledger/fabric-couchdb
+    #   Uncomment the port mapping if you want to expose the CouchDB service,
+    #   for example to utilize Fauxton User Interface in dev environments.
+        ports:
+         - "8984:5984"
+        networks:
+            - fabric
+
+     peer1.dfarmretail.com:
+        extends:
+            file: docker-compose-base.yml
+            service: peer
+        container_name: peer1.dfarmretail.com
+        environment:
+            - CORE_PEER_CHAINCODELISTENADDRESS=peer1.dfarmretail.com:8052
+            - CORE_PEER_ID=peer1.dfarmretail.com
+            - CORE_PEER_ADDRESS=peer1.dfarmretail.com:8051
+            - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.dfarmadmin.com:7051
+            - CORE_PEER_GOSSIP_ORGLEADER=false
+            - CORE_PEER_GOSSIP_USELEADERELECTION=true
+            - CORE_PEER_LOCALMSPID=DfarmretailMSP
+            - CORE_PEER_TLS_CLIENTROOTCAS_FILES=/var/hyperledger/users/Admin@dfarmretail.com/tls/ca.crt
+            - CORE_PEER_TLS_CLIENTCERT_FILE=/var/hyperledger/users/Admin@dfarmretail.com/tls/client.crt
+            - CORE_PEER_TLS_CLIENTKEY_FILE=/var/hyperledger/users/Admin@dfarmretail.com/tls/client.key
+            - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb2:5984
+        volumes:
+            - ../crypto-config/peerOrganizations/dfarmretail.com/peers/peer1.dfarmretail.com/msp:/var/hyperledger/msp
+            - ../crypto-config/peerOrganizations/dfarmretail.com/peers/peer1.dfarmretail.com/tls:/var/hyperledger/tls
+            - ../crypto-config/peerOrganizations/dfarmretail.com/users:/var/hyperledger/users
+            - ../channel-artifacts/:/var/hyperledger/configs
+        extra_hosts:
+            - "orderer.dfarmadmin.com:3.137.195.195"
+            - "peer0.dfarmadmin.com:3.133.93.116"
+        networks:
+          fabric:
+             aliases:
+               - net
+        ports:
+          - 8051:8051
+          - 8053:8053
+        depends_on:
+          - couchdb2
+
+     clikm:
+        container_name: clikm
+        image: hyperledger/fabric-tools
+        tty: true
+        environment:
+          - GOPATH=/opt/gopath
+          - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+          - CORE_LOGGING_LEVEL=DEBUG
+          - CORE_PEER_ID=clikm
+          - CORE_PEER_ADDRESS=peer1.dfarmretail.com:8051
+          - CORE_PEER_LOCALMSPID=DfarmretailMSP
+          - CORE_PEER_TLS_ENABLED=false
+          - CORE_PEER_TLS_CERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/peers/peer1.dfarmretail.com/tls/server.crt
+          - CORE_PEER_TLS_KEY_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/peers/peer1.dfarmretail.com/tls/server.key
+          - CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/peers/peer1.dfarmretail.com/tls/ca.crt
+          - CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/users/Admin@dfarmretail.com/msp
+          - CORE_CHAINCODE_KEEPALIVE=10
+        extra_hosts:
+          - "orderer.dfarmadmin.com:3.137.195.195"
+          - "peer0.dfarmadmin.com:3.133.93.116"
+        working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+        command: /bin/bash
+        volumes:
+            - /var/run/:/host/var/run/
+            - ../../chaincode/:/opt/gopath/src/github.com/
+            #- $GOPATH/src/github.com/hyperledger/fabric/:/opt/gopath/src/github.com/hyperledger/fabric/
+            - ../crypto-config:/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/
+            - ../channel-artifacts:/opt/gopath/src/github.com/hyperledger/fabric/peer/channel-artifacts/
+        depends_on:
+          - peer1.dfarmretail.com
+        networks:
+            - fabric
+
+     peer0.dfarmretail.com:
+        extends:
+            file: docker-compose-base.yml
+            service: peer
+        container_name: peer0.dfarmretail.com
+        environment:
+            - CORE_PEER_CHAINCODELISTENADDRESS=peer0.dfarmretail.com:7052
+            - CORE_PEER_ID=peer0.dfarmretail.com
+            - CORE_PEER_ADDRESS=peer0.dfarmretail.com:7051
+            - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.dfarmadmin.com:7051
+            - CORE_PEER_GOSSIP_ORGLEADER=false
+            - CORE_PEER_GOSSIP_USELEADERELECTION=true
+            - CORE_PEER_LOCALMSPID=DfarmretailMSP
+            - CORE_PEER_TLS_CLIENTROOTCAS_FILES=/var/hyperledger/users/Admin@dfarmretail.com/tls/ca.crt
+            - CORE_PEER_TLS_CLIENTCERT_FILE=/var/hyperledger/users/Admin@dfarmretail.com/tls/client.crt
+            - CORE_PEER_TLS_CLIENTKEY_FILE=/var/hyperledger/users/Admin@dfarmretail.com/tls/client.key
+            - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb1:5984
+        volumes:
+            - ../crypto-config/peerOrganizations/dfarmretail.com/peers/peer0.dfarmretail.com/msp:/var/hyperledger/msp
+            - ../crypto-config/peerOrganizations/dfarmretail.com/peers/peer0.dfarmretail.com/tls:/var/hyperledger/tls
+            - ../crypto-config/peerOrganizations/dfarmretail.com/users:/var/hyperledger/users
+            - ../channel-artifacts/:/var/hyperledger/configs
+        extra_hosts:
+            - "orderer.dfarmadmin.com:3.137.195.195"
+            - "peer0.dfarmadmin.com:3.133.93.116"
+        networks:
+          fabric:
+             aliases:
+               - net
+        ports:
+          - 7051:7051
+          - 7053:7053
+        depends_on:
+          - couchdb1
+
+     cliyng:
+        container_name: cliyng
+        image: hyperledger/fabric-tools
+        tty: true
+        environment:
+          - GOPATH=/opt/gopath
+          - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+          - CORE_LOGGING_LEVEL=DEBUG
+          - CORE_PEER_ID=cliyng
+          - CORE_PEER_ADDRESS=peer0.dfarmretail.com:7051
+          - CORE_PEER_LOCALMSPID=DfarmretailMSP
+          - CORE_PEER_TLS_ENABLED=false
+          - CORE_PEER_TLS_CERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/peers/peer0.dfarmretail.com/tls/server.crt
+          - CORE_PEER_TLS_KEY_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/peers/peer0.dfarmretail.com/tls/server.key
+          - CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/peers/peer0.dfarmretail.com/tls/ca.crt
+          - CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/users/Admin@dfarmretail.com/msp
+          - CORE_CHAINCODE_KEEPALIVE=10
+        extra_hosts:
+          - "orderer.dfarmadmin.com:3.137.195.195"
+          - "peer0.dfarmadmin.com:3.133.93.116"
+        working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+        command: /bin/bash
+        volumes:
+            - /var/run/:/host/var/run/
+            - ../../chaincode/:/opt/gopath/src/github.com/
+            #- $GOPATH/src/github.com/hyperledger/fabric/:/opt/gopath/src/github.com/hyperledger/fabric/
+            - ../crypto-config:/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/
+            - ../channel-artifacts:/opt/gopath/src/github.com/hyperledger/fabric/peer/channel-artifacts/
+        depends_on:
+          - peer0.dfarmretail.com
+        networks:
+            - fabric
+
+     couchdb3:
+        container_name: couchdb3
+        image: hyperledger/fabric-couchdb
+    #   Uncomment the port mapping if you want to expose the CouchDB service,
+    #   for example to utilize Fauxton User Interface in dev environments.
+        ports:
+         - "9984:5984"
+        networks:
+            - fabric
+
+     peer2.dfarmretail.com:
+        extends:
+            file: docker-compose-base.yml
+            service: peer
+        container_name: peer2.dfarmretail.com
+        environment:
+            - CORE_PEER_CHAINCODELISTENADDRESS=peer2.dfarmretail.com:9052
+            - CORE_PEER_ID=peer2.dfarmretail.com
+            - CORE_PEER_ADDRESS=peer2.dfarmretail.com:9051
+            - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.dfarmadmin.com:7051
+            - CORE_PEER_GOSSIP_ORGLEADER=false
+            - CORE_PEER_GOSSIP_USELEADERELECTION=true
+            - CORE_PEER_LOCALMSPID=DfarmretailMSP
+            - CORE_PEER_TLS_CLIENTROOTCAS_FILES=/var/hyperledger/users/Admin@dfarmretail.com/tls/ca.crt
+            - CORE_PEER_TLS_CLIENTCERT_FILE=/var/hyperledger/users/Admin@dfarmretail.com/tls/client.crt
+            - CORE_PEER_TLS_CLIENTKEY_FILE=/var/hyperledger/users/Admin@dfarmretail.com/tls/client.key
+            - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb3:5984
+
+        volumes:
+            - ../crypto-config/peerOrganizations/dfarmretail.com/peers/peer2.dfarmretail.com/msp:/var/hyperledger/msp
+            - ../crypto-config/peerOrganizations/dfarmretail.com/peers/peer2.dfarmretail.com/tls:/var/hyperledger/tls
+            - ../crypto-config/peerOrganizations/dfarmretail.com/users:/var/hyperledger/users
+            - ../channel-artifacts/:/var/hyperledger/configs
+        extra_hosts:
+            - "orderer.dfarmadmin.com:3.137.195.195"
+            - "peer0.dfarmadmin.com:3.133.93.116"
+        networks:
+          fabric:
+             aliases:
+               - net
+        ports:
+          - 9051:9051
+          - 9053:9053
+        depends_on:
+          - couchdb3
+
+     cliapm:
+        container_name: cliapm
+        image: hyperledger/fabric-tools
+        tty: true
+        environment:
+          - GOPATH=/opt/gopath
+          - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+          - CORE_LOGGING_LEVEL=DEBUG
+          - CORE_PEER_ID=cliapm
+          - CORE_PEER_ADDRESS=peer2.dfarmretail.com:9051
+          - CORE_PEER_LOCALMSPID=DfarmretailMSP
+          - CORE_PEER_TLS_ENABLED=false
+          - CORE_PEER_TLS_CERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/peers/peer2.dfarmretail.com/tls/server.crt
+          - CORE_PEER_TLS_KEY_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/peers/peer2.dfarmretail.com/tls/server.key
+          - CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/peers/peer2.dfarmretail.com/tls/ca.crt
+          - CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/dfarmretail.com/users/Admin@dfarmretail.com/msp
+          - CORE_CHAINCODE_KEEPALIVE=10
+        extra_hosts:
+          - "orderer.dfarmadmin.com:3.137.195.195"
+          - "peer0.dfarmadmin.com:3.133.93.116"
+        working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+        command: /bin/bash
+        volumes:
+            - /var/run/:/host/var/run/
+            - ../../chaincode/:/opt/gopath/src/github.com/
+            #- $GOPATH/src/github.com/hyperledger/fabric/:/opt/gopath/src/github.com/hyperledger/fabric/
+            - ../crypto-config:/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/
+            - ../channel-artifacts:/opt/gopath/src/github.com/hyperledger/fabric/peer/channel-artifacts/
+        depends_on:
+          - peer2.dfarmretail.com
+        networks:
+            - fabric
